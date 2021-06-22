@@ -23,9 +23,15 @@ FLKR_SEC=os.getenv('FLICKR_SECRET')
 FETCH_COUNT = 100
 PAGE_RANGE = 100
 BLOCKLIST = ["61021753@N02", "93689361@N05"]
-SAVED_IMAGES = "\img"
+SAVED_IMAGES = "/img"
 FILEPATH = os.getcwd() + SAVED_IMAGES
 LOGFILE = "titpostbotlog.txt"
+
+# - retrieve image url from flickr
+# - download file temporarily
+# - downscale image
+# - upload file to twitter
+# - delete temp files
 
 # references
 auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
@@ -38,14 +44,6 @@ try:
     print("Authentication OK")
 except:
     print("Error during authentication")
-
-# simple_upload(filename, *, file, media_category, additional_owners)
-
-# - retrieve image from flickr once an hour
-# - download file temporarily
-# - upload file to twitter
-# - delete temp file
-
 
 # utility functions
 def getTime():
@@ -106,32 +104,29 @@ def findBirdImageUrl(i_COUNT):
 
 
 def resizeImage(path, name, width):
-    #output = open("titpostbotlog.txt", "a")
     img = Image.open(path)
     wpercent = (width/float(img.size[0]))
     hsize = int((float(img.size[1])*float(wpercent)))
     img = img.resize((width, hsize), Image.ANTIALIAS)
-    img.save("img\\" + "rs_" +name)
+    img.save("img/" + "rs_" +name)
     img.close()
-    writeToLog("Path: "+str(FILEPATH)+"\\"+str(name))
-    #output.write((getTime() + " path is: "+str(FILEPATH)+"\\"+str(name)+"\n"))
-    print(" Path: "+str(FILEPATH)+"\\"+str(name)+"\n")
-    os.remove(str(str(FILEPATH)+"\\"+str(name)))
-    #output.write((getTime() + " Resized file and removed original.\n"))
+    writeToLog("Path: "+str(FILEPATH)+"/"+str(name))
+
+    print(" Path: "+str(FILEPATH)+"/"+str(name)+"\n")
+    os.remove(str(str(FILEPATH)+"/"+str(name)))
+
     writeToLog("Resized file and removed original.")
-    #output.close()
+
 
 def cleanUpImages(name):
-    #dry run;
-    os.remove(str(FILEPATH)+"\\"+str(name))
-
+    os.remove(str(FILEPATH)+"/"+str(name))
     print("removed image " + name + "\n")
     print("file path: " + str(FILEPATH) + "\n")
 
 
 def postBirdToTwitter(statusText):
     mediaIDList = []
-    #output = open("titpostbotlog.txt", "a")
+
     imageURL = findBirdImageUrl(FETCH_COUNT)
     fullImagePath = wget.download(imageURL, out=FILEPATH)
     print("") #this is here because wget is dumb
@@ -142,7 +137,7 @@ def postBirdToTwitter(statusText):
     print(debugImageName)
 
     resizeImage(fullImagePath, tempImageName, 1600)
-    media_info = api.simple_upload(filename=str("img\\"+"rs_"+tempImageName))
+    media_info = api.simple_upload(filename=str("img/"+"rs_"+tempImageName))
     mediaIDList.append(media_info.media_id)
 
     postedStatusInfo = api.update_status(status=statusText, media_ids=mediaIDList)
