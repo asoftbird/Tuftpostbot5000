@@ -21,17 +21,12 @@ FLKR_SEC=os.getenv('FLICKR_SECRET')
 
 # config
 FETCH_COUNT = 100
-PAGE_RANGE = 100
+PAGE_RANGE = 30 #requests are limited to ~4000 images, beyond that repeats will occur
 BLOCKLIST = ["61021753@N02", "93689361@N05"]
 SAVED_IMAGES = "/img"
 FILEPATH = os.getcwd() + SAVED_IMAGES
 LOGFILE = "titpostbotlog.txt"
-
-# - retrieve image url from flickr
-# - download file temporarily
-# - downscale image
-# - upload file to twitter
-# - delete temp files
+SEARCH_TAGS = 'tufted titmouse' #one string, comma-separated tags
 
 # references
 auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
@@ -44,6 +39,14 @@ try:
     print("Authentication OK")
 except:
     print("Error during authentication")
+
+# simple_upload(filename, *, file, media_category, additional_owners)
+
+# - retrieve image from flickr once an hour
+# - download file temporarily
+# - upload file to twitter
+# - delete temp file
+
 
 # utility functions
 def getTime():
@@ -58,20 +61,23 @@ def writeToLog(message):
 
 # main functions
 def findBirdImageUrl(i_COUNT):
-    output = open("titpostbotlog.txt", "a")
     pageNum = random.randint(1, PAGE_RANGE)
+    argExtras = 'url_o, owner_name, path_alias'
 
-    searchQuery = flickr.photos.search(tags='tufted titmouse', extras='url_o', per_page=i_COUNT, page = pageNum)
+    searchQuery = flickr.photos.search(tags=SEARCH_TAGS, extras=argExtras, per_page=i_COUNT, page = pageNum)
 
     blocked = 0
     denied = 0
     data = []
     photoOwner = []
     photoID = []
+    photoOwnerName = []
+    f_pathAlias = False #for logging purposes
 
     data.clear()
     photoOwner.clear()
     photoID.clear()
+    photoOwnerName.clear()
 
     for v in searchQuery["photos"]["photo"]:
         if str(v["owner"]) not in BLOCKLIST:
@@ -80,6 +86,14 @@ def findBirdImageUrl(i_COUNT):
                 if "owner" in v:
                     photoOwner.append(v["owner"])
                     photoID.append(v["id"])
+                if "pathalias" in v:
+                    if v["pathalias"] != None:
+                        photoOwnerName.append(v["pathalias"])
+                        f_pathAlias = True
+                    else:
+                        photoOwnerName.append(v["ownername"])
+                        f_pathAlias = False
+
             else: denied = denied + 1
         else:
             blocked = blocked + 1
@@ -90,58 +104,55 @@ def findBirdImageUrl(i_COUNT):
     else:
         selectedIndex = 0
 
-    output.write((getTime() + " Got " + str(i_COUNT) + " bird pics of which " + str(len(data)) + " valid.\n"))
-    output.write((getTime() + " Denied " + str(denied) + " images and blocked " + str(blocked) + " images.\n"))
-    output.write((getTime() + " Sent image " + str(photoID[selectedIndex]) + " by user " + str(photoOwner[selectedIndex]) + ".\n"))
-    output.write((getTime() + " Sent URL " + str(data[selectedIndex]) + "\n"))
+    writeToLog("Got " + str(i_COUNT) + " bird pics of which " + str(len(data)) + " valid.")
+    writeToLog("Denied " + str(denied) + " images and blocked " + str(blocked) + " images.")
+    if f_pathAlias == True:
+        writeToLog("Sent image ID " + str(photoID[selectedIndex]) + " by user ID " + str(photoOwner[selectedIndex]) + " aka (PA) " + str(photoOwnerName[selectedIndex]) + ".")
+    else:
+        writeToLog("Sent image ID " + str(photoID[selectedIndex]) + " by user ID " + str(photoOwner[selectedIndex]) + " aka (NAME) " + str(photoOwnerName[selectedIndex]) + ".")
+    writeToLog("Sent URL " + str(data[selectedIndex]))
 
     print(getTime() + " Got " + str(i_COUNT) + " bird pics of which " + str(len(data)) + " valid.")
     print(getTime() + " Denied " + str(denied) + " images and blocked " + str(blocked) + " images.")
-    print(getTime() + " Sent image " + str(photoID[selectedIndex]) + " by user " + str(photoOwner[selectedIndex]))
-    output.close()
+    print(getTime() + " Sent image ID " + str(photoID[selectedIndex]) + " by user ID " + str(photoOwner[selectedIndex]) + " aka " + str(photoOwnerName[selectedIndex]) + ".")
 
-    return(data[selectedIndex])
-
+    return(data[selectedIndex], photoOwnerName[selectedIndex])
 
 def resizeImage(path, name, width):
+
     img = Image.open(path)
     wpercent = (width/float(img.size[0]))
     hsize = int((float(img.size[1])*float(wpercent)))
     img = img.resize((width, hsize), Image.ANTIALIAS)
     img.save("img/" + "rs_" +name)
     img.close()
-    writeToLog("Path: "+str(FILEPATH)+"/"+str(name))
-
-    print(" Path: "+str(FILEPATH)+"/"+str(name)+"\n")
     os.remove(str(str(FILEPATH)+"/"+str(name)))
-
-    writeToLog("Resized file and removed original.")
-
 
 def cleanUpImages(name):
     os.remove(str(FILEPATH)+"/"+str(name))
-    print("removed image " + name + "\n")
-    print("file path: " + str(FILEPATH) + "\n")
 
 
 def postBirdToTwitter(statusText):
     mediaIDList = []
 
-    imageURL = findBirdImageUrl(FETCH_COUNT)
+    birdImageResult = findBirdImageUrl(FETCH_COUNT)
+    imageURL = birdImageResult[0]
+    ownerName = birdImageResult[1]
+
     fullImagePath = wget.download(imageURL, out=FILEPATH)
     print("") #this is here because wget is dumb
 
     tempImageName = fullImagePath.replace(str(FILEPATH)+"/", '')
     debugImageName = str("rs_"+tempImageName)
-    print("file name: \n")
-    print(debugImageName)
 
     resizeImage(fullImagePath, tempImageName, 1600)
     media_info = api.simple_upload(filename=str("img/"+"rs_"+tempImageName))
     mediaIDList.append(media_info.media_id)
 
-    postedStatusInfo = api.update_status(status=statusText, media_ids=mediaIDList)
-    writeToLog("Posted image ID " + debugImageName + " to Twitter at " + str(postedStatusInfo.created_at) + " with Tweet ID: " + str(postedStatusInfo.id))
+    fStatusText = statusText + " (by " + str(ownerName) + " on flickr)"
+    print(fStatusText)
+    postedStatusInfo = api.update_status(status=fStatusText, media_ids=mediaIDList)
+    writeToLog("Posted image ID " + debugImageName + " to Twitter at " + str(postedStatusInfo.created_at) + " at http://https://twitter.com/asoftbird/status/" + str(postedStatusInfo.id))
 
     mediaIDList.clear()
     return debugImageName
@@ -151,4 +162,3 @@ writeToLog("========= Starting image upload ========= ")
 
 cleanUpImages(postBirdToTwitter("#Tuftpostbot"))
 
-writeToLog("Removed resized image.")
