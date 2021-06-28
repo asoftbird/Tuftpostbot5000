@@ -3,8 +3,6 @@ import json
 import random
 import tweepy
 import flickrapi
-import wget
-import shortuuid
 
 from time import sleep
 from dotenv import load_dotenv
@@ -16,7 +14,6 @@ from fastai.text.all import *
 from fastai.collab import *
 from fastai.tabular.all import *
 
-
 load_dotenv()
 # API auth keys
 CONS_KEY=os.getenv('TWT_CONSUMER_APIKEY')
@@ -27,11 +24,9 @@ FLKR_KEY=os.getenv('FLICKR_KEY')
 FLKR_SEC=os.getenv('FLICKR_SECRET')
 
 # config
-FETCH_COUNT = 25 #50
-PAGE_RANGE = 79 #79
-BLOCKLIST = ["61021753@N02", "93689361@N05"]
-SAVED_IMAGES = "/tuftml"
-FILE_PATH = os.getcwd() + SAVED_IMAGES
+FETCH_COUNT = 25
+PAGE_RANGE = 79
+BLOCKLIST = [""] #TODO implement blocklist in filterSearchResults()
 LOGFILE = "titpostbotlog.txt"
 EXTRA_ARGS = 'url_o, owner_name, path_alias'
 TAGS = 'tufted titmouse'
@@ -42,12 +37,6 @@ auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
 auth.set_access_token(AUTH_ACC, AUTH_SEC)
 api = tweepy.API(auth, wait_on_rate_limit=True)
 flickr = flickrapi.FlickrAPI(FLKR_KEY, FLKR_SEC, format='parsed-json')
-
-# try:
-#     api.verify_credentials()
-#     print("Authentication OK")
-# except:
-#     print("Error during authentication")
 
 # utility functions
 def getTime():
@@ -90,7 +79,6 @@ def findBirdImage(search_tags, extra_arguments, image_fetch_count):
     search_arguments = [extra_arguments]
     search_query = flickr.photos.search(tags=search_tags, extras=search_arguments, per_page=image_fetch_count, page=page_number)
     return search_query
-
 
 # filter based on functionality; filtering on bird type comes later
 def filterSearchResults(search_query):
@@ -148,8 +136,8 @@ def collectInitialImageDataSet(count, max_requests):
     result_string = str(f"Found {count} images in {iterator}/{max_requests} attempts.")
     print(result_string)
     writeToLog(result_string)
-
     return result_data_set
+
 
 def downloadImagesFromURL(data_set, destination_path):
     list_filenames = []
@@ -179,15 +167,11 @@ def resizeImages(list_filenames, filepath, target_path, width):
         image.convert('RGB').save((target_path + "/" + "rs_" + filename_no_extension+".jpg"), format="JPEG")
 
 
-
-
 def checkTufts(filepath, image_data_list):
     for file in os.listdir(filepath):
         img = PILImage.create(str(filepath)+"/"+str(file))
         is_tufter,_,probs = learn.predict(img)
-        #print(f"Is {file} a tuftie? {is_tufter} ({probs[1].item():.6f})")
-        #if is_tufter == "False":
-        if probs[1].item() < 0.90:
+        if probs[1].item() < 0.90: #only let >90% confidence images through; ensure tufterino is posted
             deleteSingleImage(filepath, file)
             image_id = file.replace("rs_", "").replace(".jpg", "")
             index_a, index_b = findStringInNestedList(image_data_list, image_id)
@@ -209,6 +193,7 @@ def pickBestTuftieFromResults(input_list):
         result_list = input_list[index]
         return result_list
     except:
+        # no suitable images found? post backup image with dumb message
         backup_tuft = ['http://example.com', 'tuftpostbot5000', 'backuptuft', '12345', '4325.000', 'YES']
         return backup_tuft
 
@@ -229,22 +214,14 @@ def postBirdToTwitter(picked_image):
 
     image_name = "rs_"+filename+".jpg"
     full_path = file_path+"/"+image_name
-
-
     media_info = api.simple_upload(filename=full_path)
     media_id_list.append(media_info.media_id)
-
     status_text = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}")
-    writeToLog(status_text)
-
     posted_status_info = api.update_status(status=status_text, media_ids=media_id_list)
+    writeToLog(status_text)
     media_id_list.clear()
 
-# TODO:
-# keep files in /resized/ around so there's a supply of tufterinos available
-# handle duplicates / post archive pic if bot can't find any image
-
-
+# calls 
 # clear temp folders before loading new images
 deleteAllTempImages("ids")
 deleteAllTempImages("resized")
@@ -253,14 +230,10 @@ print("\n Looking for new tufties!\n")
 writeToLog("Looking for tufties!")
 initial_data_set  = (collectInitialImageDataSet(5, 40))
 downloaded_filename_list = downloadImagesFromURL(initial_data_set, "ids")
-
 resizeImages(downloaded_filename_list, "ids", "resized", RESOLUTION)
-
 result_list = checkTufts("resized", initial_data_set)
 print(result_list)
-
 pick = pickBestTuftieFromResults(result_list)
 print(f"Picked {pick} as #1 best tuftie of the year!")
-writeToLog(pick)
-
 postBirdToTwitter(pick)
+writeToLog(pick)
