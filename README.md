@@ -13,3 +13,5 @@ Requires:
 * Pillow          8.2.0
 
 
+convolutional neural network model not included in the repo as it's >25MB :(
+
