@@ -152,7 +152,7 @@ def filterSearchResults(search_query):
         if not checkImageIDInRegistry(v["id"]):
             image_id_string = v["id"]
             if "url_o" in v:
-                image_url = v["url_o"]
+                image_url_data = v["url_o"]
                 b_returned_image = True
                 if "owner" in v:
                     photo_owner_id = v["owner"]
