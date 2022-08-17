@@ -17,7 +17,7 @@ from fastai.text.all import *
 from fastai.collab import *
 from fastai.tabular.all import *
 from discord_webhook import DiscordWebhook
-from utils import *
+from util.utilityfuncs import *
 
 base_posix_path = pathlib.PosixPath
 

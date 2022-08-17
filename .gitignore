@@ -1,7 +1,9 @@
+/__pycache__/
+/venv/
+
 .env
 .venv
+tuftregistry.txt
+log.txt
 *.pkl
 *.pyc
-/venv/*
-*.env
-log.txt
