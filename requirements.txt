@@ -6,6 +6,7 @@ click==8.1.3
 colorama==0.4.5
 cycler==0.11.0
 cymem==2.0.6
+discord-webhook==0.16.3
 fastai==2.7.9
 fastcore==1.5.17
 fastdownload==0.0.7
@@ -54,3 +55,4 @@ typer==0.4.2
 typing_extensions==4.3.0
 urllib3==1.26.11
 wasabi==0.10.1
+wget==3.2
