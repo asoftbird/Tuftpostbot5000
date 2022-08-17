@@ -5,6 +5,7 @@ import random
 import tweepy
 import flickrapi
 import wget
+import pathlib
 
 from time import sleep
 from dotenv import load_dotenv
@@ -17,6 +18,14 @@ from fastai.collab import *
 from fastai.tabular.all import *
 from discord_webhook import DiscordWebhook
 from utils import *
+
+base_posix_path = pathlib.PosixPath
+
+if sys.platform.startswith("linux"):
+    pass
+elif sys.platform.startswith("win32"):
+    pathlib.PosixPath = pathlib.WindowsPath
+
 
 load_dotenv()
 # API auth keys
@@ -53,7 +62,7 @@ CONFIDENCE_THRESHOLD=cfgmain['CONFIDENCE_THRESHOLD']
 
 # POSTING OPTIONS
 RESOLUTION=cfgmain['RESOLUTION']
-DEFAULT_MSG_PREFIX=cfgmain['DEFAULTMSG']
+DEFAULT_MSG_PREFIX=cfgmain['DEFAULT_MSG_PREFIX']
 ENABLE_WEBHOOK=cfgmain['ENABLE_WEBHOOK']
 
 ##########################################################
