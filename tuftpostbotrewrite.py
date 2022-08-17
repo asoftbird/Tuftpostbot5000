@@ -8,7 +8,6 @@ import wget
 
 from time import sleep
 from dotenv import load_dotenv
-from datetime import datetime
 from PIL import Image
 from PIL import ImageOps
 from urllib import request
@@ -17,6 +16,7 @@ from fastai.text.all import *
 from fastai.collab import *
 from fastai.tabular.all import *
 from discord_webhook import DiscordWebhook
+from utils import *
 
 load_dotenv()
 # API auth keys
@@ -26,34 +26,49 @@ AUTH_ACC=os.getenv('TWT_AUTH_ACCESSTOKEN')
 AUTH_SEC=os.getenv('TWT_AUTH_SECRET')
 FLKR_KEY=os.getenv('FLICKR_KEY')
 FLKR_SEC=os.getenv('FLICKR_SECRET')
+WEBHOOK_URL=os.getenv('WEBHOOK_URL')
 
-# init
+##########################################################
+
+# CONFIG
+cfgbase = load_json("config.json")["config-base"]
+cfgmain = load_json("config.json")["config-main"]
+
+# LOGGING
+LOGFILE=cfgbase["LOGFILE"]
+REGISTRY_FILE=cfgbase["REGISTRY_FILE"]
+
+# FLICKR API SETTINGS
+ATTEMPTS=cfgmain['MAX_ATTEMPTS']
+FETCH_COUNT=cfgmain['FETCH_COUNT']
+PAGE_RANGE=cfgmain['PAGE_RANGE']
+EXTRA_ARGS=cfgmain['EXTRA_ARGS']
+TAGS=cfgmain['TAGS']
+BLOCKLIST=cfgmain['BLOCKLIST']
+
+# MODEL SETTINGS
+BOT_NAME=cfgmain["BOT_NAME"]
+ML_MODEL_FILE=cfgmain['ML_MODEL_FILE']
+CONFIDENCE_THRESHOLD=cfgmain['CONFIDENCE_THRESHOLD']
+
+# POSTING OPTIONS
+RESOLUTION=cfgmain['RESOLUTION']
+DEFAULT_MSG_PREFIX=cfgmain['DEFAULTMSG']
+ENABLE_WEBHOOK=cfgmain['ENABLE_WEBHOOK']
+
+##########################################################
+
+# variable init
 istuft = 0
 probability = 0
 owner_name = 0
-
-# config
-CONFIDENCE_THRESHOLD = 0.50
-ATTEMPTS = 50
-FETCH_COUNT = 15 #15
-PAGE_RANGE = 256 #256 
-BLOCKLIST = ["61021753@N02", "101072775@N04", "120795404@N04"]
-LOGFILE = "titpostbotlog.txt"
-EXTRA_ARGS = 'url_o, owner_name, path_alias'
-TAGS = 'tufted titmouse'
-RESOLUTION = 1600 #pixels, width
-REGISTRY_FILE="tuftregistry.txt"
-DEFAULTMSG = (f"#Tuftpostbot Happy birdday Tuftbot! Tuftie: {istuft}({probability}). Photo by {owner_name}")
-WEBHOOK_URL = "https://discord.com/api/webhooks/984076508974968872/vIHa-l0zc6qrhK9AvYHe-BsEovsVNyfto9t1FVjeFZoyurJ6070uwr_dEjyD4MYpxDiU"
-ENABLE_WEBHOOK = True
-# WEBHOOK = TUFTED TIDDIES SERVER
+DEFAULTMSG = DEFAULT_MSG_PREFIX+f"{istuft}({probability}). Photo by {owner_name}"
 
 # references
 auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
 auth.set_access_token(AUTH_ACC, AUTH_SEC)
 api = tweepy.API(auth, wait_on_rate_limit=True)
 flickr = flickrapi.FlickrAPI(FLKR_KEY, FLKR_SEC, format='parsed-json')
-#webhook_url = "https://discord.com/api/webhooks/926135979444682783/dPGZAUNy4VrzFK-RHfFg0WceyBfe_5uSOCaABkfZTxpxnFajIOnAGW5jBWemvWycpxu2"
 
 try:
     api.verify_credentials()
@@ -61,20 +76,9 @@ try:
 except Exception as e:
     print(f"Error during authentication: {e}")
 
-#api.verify_credentials()
-#print("verify")
 
 
-# utility functions
-def getTime():
-    dateTimeObj = datetime.now()
-    timestampStr = dateTimeObj.strftime("[%d-%m-%Y %H:%M:%S]")
-    return(timestampStr)
 
-def writeToLog(message):
-    output = open(str(LOGFILE), "a")
-    output.write(getTime() + " " + str(message) + "\n")
-    output.close()
 
 def deleteAllTempImages(folder_path):
     for file in os.scandir(folder_path):
