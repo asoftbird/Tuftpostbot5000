@@ -8,7 +8,6 @@ import pathlib
 
 from time import sleep
 from dotenv import load_dotenv
-from datetime import datetime
 from PIL import Image
 from PIL import ImageOps
 from fastai.vision.all import *
