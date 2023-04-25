@@ -4,28 +4,27 @@ import json
 import random
 import tweepy
 import flickrapi
-import wget
 import pathlib
 
 from time import sleep
 from dotenv import load_dotenv
+from datetime import datetime
 from PIL import Image
 from PIL import ImageOps
-from urllib import request
 from fastai.vision.all import *
 from fastai.text.all import *
 from fastai.collab import *
 from fastai.tabular.all import *
 from discord_webhook import DiscordWebhook
-from util.utilityfuncs import *
+from cohost.models.user import User
+from cohost.models.block import MarkdownBlock
 
+# linux / windows compatibility
 base_posix_path = pathlib.PosixPath
-
 if sys.platform.startswith("linux"):
     pass
 elif sys.platform.startswith("win32"):
     pathlib.PosixPath = pathlib.WindowsPath
-
 
 load_dotenv()
 # API auth keys
@@ -37,41 +36,33 @@ FLKR_KEY=os.getenv('FLICKR_KEY')
 FLKR_SEC=os.getenv('FLICKR_SECRET')
 WEBHOOK_URL=os.getenv('WEBHOOK_URL')
 
-##########################################################
+# cohost env vars
+CH_UNAME=os.getenv('COHO_UNAME')
+CH_PW=os.getenv('COHO_PW')
+CH_PAGE=os.getenv('COHO_PAGE')
 
-# CONFIG
-cfgbase = load_json("config.json")["config-base"]
-cfgmain = load_json("config.json")["config-main"]
-
-# LOGGING
-LOGFILE=cfgbase["LOGFILE"]
-REGISTRY_FILE=cfgbase["REGISTRY_FILE"]
-
-# FLICKR API SETTINGS
-ATTEMPTS=cfgmain['MAX_ATTEMPTS']
-FETCH_COUNT=cfgmain['FETCH_COUNT']
-PAGE_RANGE=cfgmain['PAGE_RANGE']
-EXTRA_ARGS=cfgmain['EXTRA_ARGS']
-TAGS=cfgmain['TAGS']
-BLOCKLIST=cfgmain['BLOCKLIST']
-
-# MODEL SETTINGS
-BOT_NAME=cfgmain["BOT_NAME"]
-ML_MODEL_FILE=cfgmain['ML_MODEL_FILE']
-CONFIDENCE_THRESHOLD=cfgmain['CONFIDENCE_THRESHOLD']
-
-# POSTING OPTIONS
-RESOLUTION=cfgmain['RESOLUTION']
-DEFAULT_MSG_PREFIX=cfgmain['DEFAULT_MSG_PREFIX']
-ENABLE_WEBHOOK=cfgmain['ENABLE_WEBHOOK']
-
-##########################################################
-
-# variable init
+# init
 istuft = 0
 probability = 0
 owner_name = 0
-DEFAULTMSG = DEFAULT_MSG_PREFIX+f"{istuft}({probability}). Photo by {owner_name}"
+backup_used_flag = False
+
+# config
+CONFIDENCE_THRESHOLD = 0.50
+ATTEMPTS = 50
+FETCH_COUNT = 15
+PAGE_RANGE = 256
+BLOCKLIST = ["61021753@N02", "101072775@N04", "120795404@N04"]
+LOGFILE = "titpostbotlog.txt"
+EXTRA_ARGS = 'url_o, owner_name, path_alias'
+TAGS = 'tufted titmouse'
+RESOLUTION = 1600 # (width)
+REGISTRY_FILE="tuftregistry.txt"
+DEFAULTMSG = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}")
+ENABLE_WEBHOOK = True
+ENABLE_COHOST = True
+BACKUP_TUFT_DIR = "fallbacktuft"
+BACKUP_METAFILE = "fallbackmeta.json"
 
 # references
 auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
@@ -85,9 +76,18 @@ try:
 except Exception as e:
     print(f"Error during authentication: {e}")
 
+# utility functions
+# TODO: split off utility functions to separate file
+def getTime():
+    dateTimeObj = datetime.now()
+    timestampStr = dateTimeObj.strftime("[%d-%m-%Y %H:%M:%S]")
+    return(timestampStr)
 
-
-
+def writeToLog(message):
+    # TODO: implement proper logging
+    output = open(str(LOGFILE), "a")
+    output.write(getTime() + " " + str(message) + "\n")
+    output.close()
 
 def deleteAllTempImages(folder_path):
     for file in os.scandir(folder_path):
@@ -95,7 +95,6 @@ def deleteAllTempImages(folder_path):
 
 def deleteSingleImage(folder_path, filename):
     full_path = folder_path+"/"+filename
-    #print(f"deleted {full_path} :D")
     os.remove(full_path)
 
 def findStringInNestedList(search_list, search_string):
@@ -110,13 +109,7 @@ def findStringInNestedList(search_list, search_string):
 def checkImageIDInRegistry(string):
     try:
         with open(REGISTRY_FILE, "r") as registry:
-            if string in set(registry.read().split('\n')):
-                #print(f"Found {string}!")
-                #writeToLog("checkImageIDInRegistry: Found match. Ignoring!")
-                return True
-            else:
-                #print(f"Could not find {string}!")
-                return False
+            return True if string in set(registry.read().split('\n')) else False
 
     except FileNotFoundError:
         print(f"File not found. Creating {REGISTRY_FILE}")
@@ -124,7 +117,6 @@ def checkImageIDInRegistry(string):
         newfile = open(REGISTRY_FILE, "x")
         newfile.close()
         return False
-
 
 def writeImageIDToRegistry(string):
     try:
@@ -143,6 +135,8 @@ def writeImageIDToRegistry(string):
                 newregistry.write(string)
                 print(f"Wrote {string} to new file")
 
+# TODO: check if required directories exist, if not, create them
+
 # this needs to be up here because fastai is a dummy
 def is_tufter(filename):
     return filename[0].isupper()
@@ -154,10 +148,8 @@ learn = load_learner('tuftmodel_v8_10ep_lr0.001.pkl')
 def findBirdImage(search_tags, extra_arguments, image_fetch_count):
     page_number = random.randint(1, PAGE_RANGE)
     search_arguments = [extra_arguments]
-    #print(f"Page: {page_number}.")
     search_query = flickr.photos.search(tags=search_tags, extras=search_arguments, per_page=image_fetch_count, page=page_number)
     return search_query
-
 
 # filter based on functionality; filtering on bird type comes later
 def filterSearchResults(search_query):
@@ -214,10 +206,8 @@ def collectInitialImageDataSet(count, max_requests):
         sleep(1)
         data_set, b_returned_image = filterSearchResults(findBirdImage(TAGS, EXTRA_ARGS, FETCH_COUNT))
         if b_returned_image == False:
-            # no images found
             iterator += 1
         elif b_returned_image == True:
-            # found image
             foundImages += 1
             print(f"Found {foundImages} images...")
             writeToLog(f"Found {foundImages} images...")
@@ -290,6 +280,25 @@ def checkTufts(filepath, image_data_list):
     return final_data_table
 
 
+def pickBackupTuftie():
+    # select one of the entries in the metadata file at random
+    with open(BACKUP_METAFILE) as file:
+        data = json.load(file)
+        
+    keys = list(data)
+    index = random.randint(0, len(data)-1)
+    result_key = keys[index]
+    result_data = data[result_key]
+
+    # construct data table
+    # format: ['url', 'owner', 'filename', 'owner-id', 'probability', 'istuft true/false']
+    fallbackDataTable = list(result_data.values())
+    print(fallbackDataTable)
+    
+    return fallbackDataTable
+
+
+
 def pickBestTuftieFromResults(input_list, b_writeRegistry):
     writeToLog(f"input list length: {len(input_list)}. list: {input_list}")
     print(f"input list length: {len(input_list)}. list: {input_list}")
@@ -309,7 +318,8 @@ def pickBestTuftieFromResults(input_list, b_writeRegistry):
     except Exception as e:
         print(f"Exception {type(e).__name__} occurred in pickBestTuftieFromResults: {repr(e)}")
         writeToLog(f"Exception {type(e).__name__} occurred in pickBestTuftieFromResults: {repr(e)}")
-        backup_tuft = ['https://live.staticflickr.com/65535/49872212437_1db03f17d4_o.jpg', 'tuftpostbot5000', 'backuptuft', '12345', '4325.000', 'YES']
+        backup_used_flag = True
+        backup_tuft = pickBackupTuftie()
         return backup_tuft
 
 
@@ -331,26 +341,25 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
         probability = "OVER 9000"
         istuft = "YEEHAW"
 
-    if owner_name == "tuftpostbot5000":
-        # using fallback tufterino
+    if backup_used_flag == True:
         print("WARNING: BACKUP IMAGE USED.")
         writeToLog("WARNING: BACKUP IMAGE USED.")
-        file_path = "backuptuft"
+        file_path = "fallbacktuft"
     else:
         file_path = "resized"
 
     image_name = "rs_"+filename+".jpg"
     full_path = file_path+"/"+image_name
 
+
     if message == "default":
         status_text = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}")
-        #status_text = DEFAULTMSG
+
     else:
         status_text = (f"#Tuftpostbot {message}. Tuftie: {istuft}({probability}). Photo by {owner_name}")
 
     if b_should_post:
         #send to twitter
-
         media_info = api.simple_upload(filename=full_path)
         media_id_list.append(media_info.media_id)
         posted_status_info = api.update_status(status=status_text, media_ids=media_id_list)
@@ -358,17 +367,25 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
         print(f"Sent {status_text} to Twitter!")
         writeToLog(f"Sent {status_text} to Twitter!")
 
+        media_url = posted_status_info.entities["media"][0]["media_url"]
         tweet_id = str(posted_status_info.id)
-        tweet_url = "https://twitter.com/asoftbird/status/"+tweet_id
+        tweet_url = "https://vxtwitter.com/asoftbird/status/"+tweet_id
 
         if ENABLE_WEBHOOK:
             #send to discord webhook
-            #discord_text = (f"Tuftie: {istuft}({probability}). {picked_image[0]}")
             discord_text = tweet_url
             webhook = DiscordWebhook(url=WEBHOOK_URL, content=discord_text)
             response = webhook.execute()
             print(f"Sent {discord_text} to Discord!")
             writeToLog(f"Sent {discord_text} to Discord!")
+
+        if ENABLE_COHOST:
+            #send to cohost
+            user = User.login(CH_UNAME, CH_PW)
+            project = user.getProject(CH_PAGE)
+            newpost = project.post(status_text, blocks=[MarkdownBlock(f"![]({media_url})")], tags=['tuftpostbot'])
+            print(f"Sent tweet to Cohost as well (hopefully)!")
+            writeToLog(f"Sent tweet to Cohost as well (hopefully)!")
 
     else:
         print(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text}")
@@ -386,7 +403,7 @@ if "NOPOST" in sys.argv:
     b_should_post = False
     b_writeRegistry = False
     message = "default"
-    #message = "TEST POST PLEASE IGNORE"
+
 else:
     b_should_post = True
     b_writeRegistry = True
@@ -399,17 +416,27 @@ else:
         print(f"Using custom message '{message}'")
         writeToLog(f"Using custom message '{message}'")
 
-print("\n Looking for new tufties!\n")
-writeToLog("Looking for tufties!")
-initial_data_set  = (collectInitialImageDataSet(5, ATTEMPTS))
-downloaded_filename_list = downloadImagesFromURL(initial_data_set, "ids")
+chance = random.randint(0, 500)
+print(f"\n Looking for new tufties! Rolled {chance}\n")
+writeToLog(f"Looking for tufties! Rolled {chance}")
 
-resizeImages(downloaded_filename_list, "ids", "resized", RESOLUTION)
+if chance != 42: 
+    initial_data_set  = (collectInitialImageDataSet(5, ATTEMPTS))
+    downloaded_filename_list = downloadImagesFromURL(initial_data_set, "ids")
 
-result_list = checkTufts("resized", initial_data_set)
-print(result_list)
+    resizeImages(downloaded_filename_list, "ids", "resized", RESOLUTION)
 
-pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
+    result_list = checkTufts("resized", initial_data_set)
+    print(result_list)
+
+    pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
+else:
+    print("\n Rolled a 42! Posting shitpost tuftie!\n")
+    writeToLog("Rolled a 42! Posting shitpost tuftie!")
+    # we do a lil titposting 
+    pick = pickBackupTuftie()
+
+
 print(f"Picked {pick} as #1 best tuftie of the year!")
 writeToLog(pick)
 
