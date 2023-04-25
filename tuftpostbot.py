@@ -363,8 +363,8 @@ else:
         print(f"Using custom message '{message}'")
         util.helpers.writeToLog(f"Using custom message '{message}'")
 
-#chance = random.randint(0, 500)
-chance = 42
+chance = random.randint(0, 500)
+
 print(f"\n Looking for new tufties! Rolled {chance}\n")
 util.helpers.writeToLog(f"Looking for tufties! Rolled {chance}")
 
