@@ -8,7 +8,6 @@ import pathlib
 
 from time import sleep
 from dotenv import load_dotenv
-from datetime import datetime
 from PIL import Image
 from PIL import ImageOps
 from fastai.vision.all import *
@@ -18,6 +17,13 @@ from fastai.tabular.all import *
 from discord_webhook import DiscordWebhook
 from cohost.models.user import User
 from cohost.models.block import MarkdownBlock
+
+import util
+
+util.setLogfile("tuftlog.log")
+util.setRegistryFile("registry.txt")
+
+from util.helpers import *
 
 # linux / windows compatibility
 base_posix_path = pathlib.PosixPath
@@ -53,11 +59,9 @@ ATTEMPTS = 50
 FETCH_COUNT = 15
 PAGE_RANGE = 256
 BLOCKLIST = ["61021753@N02", "101072775@N04", "120795404@N04"]
-LOGFILE = "titpostbotlog.txt"
 EXTRA_ARGS = 'url_o, owner_name, path_alias'
 TAGS = 'tufted titmouse'
 RESOLUTION = 1600 # (width)
-REGISTRY_FILE="tuftregistry.txt"
 DEFAULTMSG = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}")
 ENABLE_WEBHOOK = True
 ENABLE_COHOST = True
@@ -76,64 +80,7 @@ try:
 except Exception as e:
     print(f"Error during authentication: {e}")
 
-# utility functions
-# TODO: split off utility functions to separate file
-def getTime():
-    dateTimeObj = datetime.now()
-    timestampStr = dateTimeObj.strftime("[%d-%m-%Y %H:%M:%S]")
-    return(timestampStr)
 
-def writeToLog(message):
-    # TODO: implement proper logging
-    output = open(str(LOGFILE), "a")
-    output.write(getTime() + " " + str(message) + "\n")
-    output.close()
-
-def deleteAllTempImages(folder_path):
-    for file in os.scandir(folder_path):
-        os.remove(file.path)
-
-def deleteSingleImage(folder_path, filename):
-    full_path = folder_path+"/"+filename
-    os.remove(full_path)
-
-def findStringInNestedList(search_list, search_string):
-    for sublist in search_list:
-        try:
-            if search_string in sublist:
-                return search_list.index(sublist), sublist.index(search_string)
-        except TypeError:
-            print("Index not found!")
-
-# check if image exists in registry; returns True if already exists.
-def checkImageIDInRegistry(string):
-    try:
-        with open(REGISTRY_FILE, "r") as registry:
-            return True if string in set(registry.read().split('\n')) else False
-
-    except FileNotFoundError:
-        print(f"File not found. Creating {REGISTRY_FILE}")
-        writeToLog("checkImageIDInRegistry: Registry file not found. Creating...")
-        newfile = open(REGISTRY_FILE, "x")
-        newfile.close()
-        return False
-
-def writeImageIDToRegistry(string):
-    try:
-        if checkImageIDInRegistry(string) == False:
-            with open(REGISTRY_FILE, "a") as registry:
-                registry.write(string+"\n")
-                print(f"Wrote {string} to file")
-                writeToLog("writeImageIDToRegistry: Wrote string " + string + " to registry.")
-        else:
-            print(f"Cannot write {string} to registry: already exists")
-
-    except FileNotFoundError:
-            print(f"File {REGISTRY_FILE} not found. Creating and appending image ID.")
-            writeToLog("writeImageIDToRegistry: Registry file not found. Creating...")
-            with open(REGISTRY_FILE, "a") as newregistry:
-                newregistry.write(string)
-                print(f"Wrote {string} to new file")
 
 # TODO: check if required directories exist, if not, create them
 
@@ -187,7 +134,7 @@ def filterSearchResults(search_query):
                 b_returned_image = False
         else:
             print(f"ImageID {temp_image_id} already posted. Ignoring.")
-            writeToLog("ImageID " + temp_image_id + " already posted. Ignoring.")
+            util.helpers.writeToLog("ImageID " + temp_image_id + " already posted. Ignoring.")
             b_returned_image = False
 
     if len(image_url_data) == 0:
@@ -210,14 +157,14 @@ def collectInitialImageDataSet(count, max_requests):
         elif b_returned_image == True:
             foundImages += 1
             print(f"Found {foundImages} images...")
-            writeToLog(f"Found {foundImages} images...")
+            util.helpers.writeToLog(f"Found {foundImages} images...")
             iterator += 1
             result_data_set.append(data_set)
         if iterator >= max_requests:
             break
     result_string = str(f"Found {count} images in {iterator}/{max_requests} attempts.")
     print(result_string)
-    writeToLog(result_string)
+    util.helpers.writeToLog(result_string)
 
     return result_data_set
 
@@ -226,7 +173,7 @@ def downloadImagesFromURL(data_set, destination_path):
 
     if len(data_set) < 1:
         print("Dataset empty! AAAAAAAA")
-        writeToLog("dataset empty! AAAAAAA")
+        util.helpers.writeToLog("dataset empty! AAAAAAA")
         # TODO handle exception
 
     for _, url in enumerate(data_set):
@@ -257,23 +204,23 @@ def checkTufts(filepath, image_data_list):
         is_tufter,_,probs = learn.predict(img)
 
         if probs[1].item() < CONFIDENCE_THRESHOLD:
-            writeToLog(f"{file} rejected, {probs[1].item()}")
-            deleteSingleImage(filepath, file)
+            util.helpers.writeToLog(f"{file} rejected, {probs[1].item()}")
+            util.helpers.deleteSingleImage(filepath, file)
             image_id = file.replace("rs_", "").replace(".jpg", "")
-            index_a, index_b = findStringInNestedList(image_data_list, image_id)
+            index_a, index_b = util.helpers.findStringInNestedList(image_data_list, image_id)
             probability = '{:.4f}'.format(probs[1].item())
             image_data_list[index_a].append(probability)
             image_data_list[index_a].append(str(is_tufter))
             del image_data_list[index_a]
         else:
-            writeToLog(f"{file} accepted, {probs[1].item()}")
+            util.helpers.writeToLog(f"{file} accepted, {probs[1].item()}")
             image_id = file.replace("rs_", "").replace(".jpg", "")
-            index_a, index_b = findStringInNestedList(image_data_list, image_id)
+            index_a, index_b = util.helpers.findStringInNestedList(image_data_list, image_id)
             probability = '{:.4f}'.format(probs[1].item())
             image_data_list[index_a].append(probability)
             image_data_list[index_a].append(str(is_tufter))
     if len(image_data_list) == 0:
-        writeToLog("CheckTufts: dataset empty!")
+        util.helpers.writeToLog("CheckTufts: dataset empty!")
         print("CheckTufts: dataset empty!")
 
     final_data_table = image_data_list
@@ -300,24 +247,24 @@ def pickBackupTuftie():
 
 
 def pickBestTuftieFromResults(input_list, b_writeRegistry):
-    writeToLog(f"input list length: {len(input_list)}. list: {input_list}")
+    util.helpers.writeToLog(f"input list length: {len(input_list)}. list: {input_list}")
     print(f"input list length: {len(input_list)}. list: {input_list}")
     try:
         index = random.randint(0, len(input_list)-1)
         result_list = input_list[index]
         picked_image_id = input_list[index][2]
         print(f"index: {index}. results: {result_list}. ID: {picked_image_id}")
-        writeToLog(f"index: {index}. results: {result_list}. ID: {picked_image_id}")
+        util.helpers.writeToLog(f"index: {index}. results: {result_list}. ID: {picked_image_id}")
         if b_writeRegistry == True:
-            writeImageIDToRegistry(picked_image_id)
+            util.helpers.writeImageIDToRegistry(picked_image_id)
         test_value = result_list[4]
         print(test_value)
         print(f"result_list: {result_list}")
-        writeToLog(f"result list: {result_list}")
+        util.helpers.writeToLog(f"result list: {result_list}")
         return result_list
     except Exception as e:
         print(f"Exception {type(e).__name__} occurred in pickBestTuftieFromResults: {repr(e)}")
-        writeToLog(f"Exception {type(e).__name__} occurred in pickBestTuftieFromResults: {repr(e)}")
+        util.helpers.writeToLog(f"Exception {type(e).__name__} occurred in pickBestTuftieFromResults: {repr(e)}")
         backup_used_flag = True
         backup_tuft = pickBackupTuftie()
         return backup_tuft
@@ -343,7 +290,7 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
 
     if backup_used_flag == True:
         print("WARNING: BACKUP IMAGE USED.")
-        writeToLog("WARNING: BACKUP IMAGE USED.")
+        util.helpers.writeToLog("WARNING: BACKUP IMAGE USED.")
         file_path = "fallbacktuft"
     else:
         file_path = "resized"
@@ -365,7 +312,7 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
         posted_status_info = api.update_status(status=status_text, media_ids=media_id_list)
         media_id_list.clear()
         print(f"Sent {status_text} to Twitter!")
-        writeToLog(f"Sent {status_text} to Twitter!")
+        util.helpers.writeToLog(f"Sent {status_text} to Twitter!")
 
         media_url = posted_status_info.entities["media"][0]["media_url"]
         tweet_id = str(posted_status_info.id)
@@ -377,7 +324,7 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
             webhook = DiscordWebhook(url=WEBHOOK_URL, content=discord_text)
             response = webhook.execute()
             print(f"Sent {discord_text} to Discord!")
-            writeToLog(f"Sent {discord_text} to Discord!")
+            util.helpers.writeToLog(f"Sent {discord_text} to Discord!")
 
         if ENABLE_COHOST:
             #send to cohost
@@ -385,19 +332,19 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
             project = user.getProject(CH_PAGE)
             newpost = project.post(status_text, blocks=[MarkdownBlock(f"![]({media_url})")], tags=['tuftpostbot'])
             print(f"Sent tweet to Cohost as well (hopefully)!")
-            writeToLog(f"Sent tweet to Cohost as well (hopefully)!")
+            util.helpers.writeToLog(f"Sent tweet to Cohost as well (hopefully)!")
 
     else:
         print(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text}")
-        writeToLog(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text}")
+        util.helpers.writeToLog(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text}")
 
 # TODO:
 # keep files in /resized/ around so there's a supply of tufterinos available
 
 
 # clear temp folders before loading new images
-deleteAllTempImages("ids")
-deleteAllTempImages("resized")
+util.helpers.deleteAllTempImages("ids")
+util.helpers.deleteAllTempImages("resized")
 
 if "NOPOST" in sys.argv:
     b_should_post = False
@@ -409,16 +356,17 @@ else:
     b_writeRegistry = True
     if len(sys.argv) <=1:
         print("starting without arguments")
-        writeToLog("starting without arguments")
+        util.helpers.writeToLog("starting without arguments")
         message = "default"
     else:
         message = str(sys.argv[1])
         print(f"Using custom message '{message}'")
-        writeToLog(f"Using custom message '{message}'")
+        util.helpers.writeToLog(f"Using custom message '{message}'")
 
 chance = random.randint(0, 500)
+
 print(f"\n Looking for new tufties! Rolled {chance}\n")
-writeToLog(f"Looking for tufties! Rolled {chance}")
+util.helpers.writeToLog(f"Looking for tufties! Rolled {chance}")
 
 if chance != 42: 
     initial_data_set  = (collectInitialImageDataSet(5, ATTEMPTS))
@@ -432,12 +380,12 @@ if chance != 42:
     pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
 else:
     print("\n Rolled a 42! Posting shitpost tuftie!\n")
-    writeToLog("Rolled a 42! Posting shitpost tuftie!")
+    util.helpers.writeToLog("Rolled a 42! Posting shitpost tuftie!")
     # we do a lil titposting 
     pick = pickBackupTuftie()
 
 
 print(f"Picked {pick} as #1 best tuftie of the year!")
-writeToLog(pick)
+util.helpers.writeToLog(pick)
 
 postBirdToTwitter(pick, message, b_should_post)
