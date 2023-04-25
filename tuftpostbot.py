@@ -19,13 +19,10 @@ from discord_webhook import DiscordWebhook
 from cohost.models.user import User
 from cohost.models.block import MarkdownBlock
 
-
-
 import util
 
-
-util.setLogfile("test123.log")
-util.setRegistryFile("registrytest.txt")
+util.setLogfile("tuftlog.log")
+util.setRegistryFile("registry.txt")
 
 from util.helpers import *
 
