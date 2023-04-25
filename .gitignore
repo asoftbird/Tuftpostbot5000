@@ -1,9 +1,13 @@
 /__pycache__/
 /venv/
-
+/_old/
 .env
+.env.dev
+.env.test
 .venv
 tuftregistry.txt
 log.txt
 *.pkl
 *.pyc
+
+*.jpg
