@@ -9,7 +9,7 @@ tuftregistry.txt
 *.log
 *.pkl
 *.pyc
-
+*.png
 *.jpg
 fallbackmeta-local.json
 !rs_a.jpg
