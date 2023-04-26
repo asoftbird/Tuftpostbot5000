@@ -14,7 +14,8 @@ elif sys.platform.startswith("win32"):
     pathlib.PosixPath = pathlib.WindowsPath
 
 # decorators
-# todo: use kwargs to ensure compatibility with other functions
+# TODO: use kwargs to ensure compatibility with other functions
+# TODO: figure out how to use this with default arguments
 def DCcheckOutfileExists(func):
     def wrapper(data, filename):
         if not os.path.isfile(filename):
@@ -87,8 +88,6 @@ def copyFile(target_dir, target_name, destination_dir):
     target_path = target_dir + "\\" + target_name
     destination_path = destination_dir + "\\" + target_name
     shutil.copy(target_path, destination_path)
-
-
 
 @DCcheckOutfileExists
 def writeDictToJSON(new_data, target_file):
