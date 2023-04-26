@@ -71,6 +71,7 @@ from util.helpers import *
 BACKUP_TUFT_DIR = "fallbacktuft"
 BACKUP_METAFILE = "fallbackmeta.json"
 IMAGE_STORE_DIR = "imagestore"
+IMAGE_INFER_DIR = "temp"
 IMAGE_DOWNLOAD_DIR = "downloads"
 
 # references
@@ -248,6 +249,9 @@ def checkTufts(filepath, image_data_list):
             probability = '{:.4f}'.format(probs[1].item())
             image_data_list[index_a].append(probability)
             image_data_list[index_a].append(str(is_tufter))
+            copyFile(filepath, file, IMAGE_STORE_DIR)
+        
+       
     if len(image_data_list) == 0:
         util.helpers.writeToLog("CheckTufts: dataset empty!")
         print("CheckTufts: dataset empty!")
@@ -372,8 +376,8 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
 
 
 # clear temp folders before loading new images
-
-util.helpers.deleteAllTempImages(IMAGE_STORE_DIR)
+util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
+util.helpers.deleteAllTempImages(IMAGE_INFER_DIR)
 
 if "NOPOST" in sys.argv:
     b_should_post = False
@@ -401,9 +405,9 @@ if chance != 42:
     initial_data_set  = (collectInitialImageDataSet(5, ATTEMPTS))
     downloaded_filename_list = downloadImagesFromURL(initial_data_set, IMAGE_DOWNLOAD_DIR)
 
-    resizeImages(downloaded_filename_list, IMAGE_DOWNLOAD_DIR, IMAGE_STORE_DIR, RESOLUTION)
+    resizeImages(downloaded_filename_list, IMAGE_DOWNLOAD_DIR, IMAGE_INFER_DIR, RESOLUTION)
 
-    result_list = checkTufts(IMAGE_STORE_DIR, initial_data_set)
+    result_list = checkTufts(IMAGE_INFER_DIR, initial_data_set)
 
     pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
 else:
@@ -417,4 +421,4 @@ print(f"Picked {pick} as #1 best tuftie of the year!")
 util.helpers.writeToLog(pick)
 
 postBirdToTwitter(pick, message, b_should_post)
-util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
+

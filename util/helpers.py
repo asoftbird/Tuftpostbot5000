@@ -1,6 +1,16 @@
 import os
+import sys
+import shutil
+import pathlib
 from datetime import datetime
 from .defaults import LOGFILE_DEFAULT, REGISTRY_DEFAULT
+
+# linux / windows compatibility
+base_posix_path = pathlib.PosixPath
+if sys.platform.startswith("linux"):
+    pass
+elif sys.platform.startswith("win32"):
+    pathlib.PosixPath = pathlib.WindowsPath
 
 # utility functions
 def getTime():
@@ -59,3 +69,8 @@ def writeImageIDToRegistry(string, target_file=REGISTRY_DEFAULT):
             with open(target_file, "a") as newregistry:
                 newregistry.write(string)
                 print(f"Wrote {string} to new file")
+
+def copyFile(target_dir, target_name, destination_dir):
+    target_path = target_dir + "\\" + target_name
+    destination_path = destination_dir + "\\" + target_name
+    shutil.copy(target_path, destination_path)
