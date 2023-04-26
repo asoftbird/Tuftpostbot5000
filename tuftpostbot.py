@@ -152,8 +152,9 @@ def filterSearchResults(search_query):
     return(data_list_full, b_returned_image)
 
 
-def asdf(metadata_list, filename):
+def saveImageMetadata(metadata_list, filename):
     # take a list of data (image_url, ownername, photoid, ownerid, confidence, tuftness)
+    # ['https://live.staticflickr.com/65535/51117059506_71a5146191_o.jpg', 'Jim Zenock', '51117059506', '149741069@N04', '0.9999', 'True']
     # along with a filename
     # create a metadata.json file containing this data;
     # format:
@@ -169,12 +170,18 @@ def asdf(metadata_list, filename):
     # data will not be modified during runtime (ie. no "is posted?" flag)
     # does require duplicate checking though.
     # use checkImageIDInRegistry() for this?
-    
-
-
-
-    pass
-
+    metadata = {
+        metadata_list[2]: {
+            'url': metadata_list[0],
+            'owner': metadata_list[1],
+            'photo-id': metadata_list[2],
+            'filename': filename,
+            'owner-id': metadata_list[3],
+            'confidence': metadata_list[4],
+            'tuftness': metadata_list[5]
+        }
+    }
+    writeDictToJSON(metadata, IMAGE_METADATA_FILE)
 
 def collectInitialImageDataSet(count, max_requests):
     iterator = 0
@@ -410,6 +417,8 @@ if chance != 42:
     resizeImages(downloaded_filename_list, IMAGE_DOWNLOAD_DIR, IMAGE_INFER_DIR, RESOLUTION)
 
     result_list = checkTufts(IMAGE_INFER_DIR, initial_data_set)
+    #saveImageMetadata(result_list, )
+    
 
     pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
 else:
