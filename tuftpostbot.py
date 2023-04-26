@@ -18,12 +18,7 @@ from discord_webhook import DiscordWebhook
 from cohost.models.user import User
 from cohost.models.block import MarkdownBlock
 
-import util
 
-util.setLogfile("tuftlog.log")
-util.setRegistryFile("registry.txt")
-
-from util.helpers import *
 
 # linux / windows compatibility
 base_posix_path = pathlib.PosixPath
@@ -65,8 +60,21 @@ RESOLUTION = 1600 # (width)
 DEFAULTMSG = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}")
 ENABLE_WEBHOOK = True
 ENABLE_COHOST = True
+
+
+# paths
+import util
+util.setLogfile("tuftlog.log")
+util.setRegistryFile("registry.log")
+from util.helpers import *
+
 BACKUP_TUFT_DIR = "fallbacktuft"
+IMAGE_STORE_DIR = "imagestore"
+IMAGE_INFER_DIR = "temp"
+IMAGE_DOWNLOAD_DIR = "downloads"
+
 BACKUP_METAFILE = "fallbackmeta.json"
+IMAGE_METADATA_FILE = "metadata.json"
 
 # references
 auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
@@ -144,6 +152,43 @@ def filterSearchResults(search_query):
     return(data_list_full, b_returned_image)
 
 
+def createMetadataDict(metadata_list, filename_list):
+    # take a list of data (image_url, ownername, photoid, ownerid, confidence, tuftness)
+    # ['https://live.staticflickr.com/65535/51117059506_71a5146191_o.jpg', 'Jim Zenock', '51117059506', '149741069@N04', '0.9999', 'True']
+    # along with a filename
+    # create a metadata.json file containing this data;
+    # format:
+    #     "UUID": {
+    #         "url": "https://titmou.se/tuft.gif",
+    #         "owner": "AAAAAA",
+    #         "photo-id": 13245,
+    #         "filename": "a",
+    #         "owner-id": "5000",
+    #         "confidence": "A",
+    #         "istuft": "AAAAAAAAAAAAA"
+    #     }
+    # data will not be modified during runtime (ie. no "is posted?" flag)
+    # does require duplicate checking though.
+    # use checkImageIDInRegistry() for this?
+    
+    metadata = {}
+
+    for index, item in enumerate(metadata_list):
+        dct = {
+            item[2]: {
+                'url': item[0],
+                'owner': item[1],
+                'photo-id': item[2],
+                'filename': filename_list[index],
+                'owner-id': item[3],
+                'confidence': item[4],
+                'tuftness': item[5]
+                }
+            }
+        metadata.update(dct)
+
+    writeDictToJSON(metadata, IMAGE_METADATA_FILE)
+
 def collectInitialImageDataSet(count, max_requests):
     iterator = 0
     foundImages = 0
@@ -199,6 +244,7 @@ def resizeImages(list_filenames, filepath, target_path, width):
 
 
 def checkTufts(filepath, image_data_list):
+    accepted_images = []
     for file in os.listdir(filepath):
         img = PILImage.create(str(filepath)+"/"+str(file))
         is_tufter,_,probs = learn.predict(img)
@@ -207,24 +253,24 @@ def checkTufts(filepath, image_data_list):
             util.helpers.writeToLog(f"{file} rejected, {probs[1].item()}")
             util.helpers.deleteSingleImage(filepath, file)
             image_id = file.replace("rs_", "").replace(".jpg", "")
-            index_a, index_b = util.helpers.findStringInNestedList(image_data_list, image_id)
-            probability = '{:.4f}'.format(probs[1].item())
-            image_data_list[index_a].append(probability)
-            image_data_list[index_a].append(str(is_tufter))
+            index_a, _ = util.helpers.findStringInNestedList(image_data_list, image_id)
             del image_data_list[index_a]
         else:
             util.helpers.writeToLog(f"{file} accepted, {probs[1].item()}")
             image_id = file.replace("rs_", "").replace(".jpg", "")
-            index_a, index_b = util.helpers.findStringInNestedList(image_data_list, image_id)
+            index_a, _ = util.helpers.findStringInNestedList(image_data_list, image_id)
             probability = '{:.4f}'.format(probs[1].item())
             image_data_list[index_a].append(probability)
             image_data_list[index_a].append(str(is_tufter))
+            accepted_images.append(file)
+            copyFile(filepath, file, IMAGE_STORE_DIR)
+        
     if len(image_data_list) == 0:
         util.helpers.writeToLog("CheckTufts: dataset empty!")
         print("CheckTufts: dataset empty!")
 
     final_data_table = image_data_list
-    return final_data_table
+    return final_data_table, accepted_images
 
 
 def pickBackupTuftie():
@@ -248,7 +294,7 @@ def pickBackupTuftie():
 
 def pickBestTuftieFromResults(input_list, b_writeRegistry):
     util.helpers.writeToLog(f"input list length: {len(input_list)}. list: {input_list}")
-    print(f"input list length: {len(input_list)}. list: {input_list}")
+    print(f"input list length: {len(input_list)}.")
     try:
         index = random.randint(0, len(input_list)-1)
         result_list = input_list[index]
@@ -293,7 +339,7 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
         util.helpers.writeToLog("WARNING: BACKUP IMAGE USED.")
         file_path = "fallbacktuft"
     else:
-        file_path = "resized"
+        file_path = IMAGE_STORE_DIR
 
     image_name = "rs_"+filename+".jpg"
     full_path = file_path+"/"+image_name
@@ -338,13 +384,9 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
         print(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text}")
         util.helpers.writeToLog(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text}")
 
-# TODO:
-# keep files in /resized/ around so there's a supply of tufterinos available
-
-
 # clear temp folders before loading new images
-util.helpers.deleteAllTempImages("ids")
-util.helpers.deleteAllTempImages("resized")
+util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
+util.helpers.deleteAllTempImages(IMAGE_INFER_DIR)
 
 if "NOPOST" in sys.argv:
     b_should_post = False
@@ -370,12 +412,14 @@ util.helpers.writeToLog(f"Looking for tufties! Rolled {chance}")
 
 if chance != 42: 
     initial_data_set  = (collectInitialImageDataSet(5, ATTEMPTS))
-    downloaded_filename_list = downloadImagesFromURL(initial_data_set, "ids")
+    downloaded_filename_list = downloadImagesFromURL(initial_data_set, IMAGE_DOWNLOAD_DIR)
 
-    resizeImages(downloaded_filename_list, "ids", "resized", RESOLUTION)
+    resizeImages(downloaded_filename_list, IMAGE_DOWNLOAD_DIR, IMAGE_INFER_DIR, RESOLUTION)
 
-    result_list = checkTufts("resized", initial_data_set)
-    print(result_list)
+    result_list, image_list = checkTufts(IMAGE_INFER_DIR, initial_data_set)
+    
+    createMetadataDict(result_list, image_list)
+    
 
     pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
 else:
@@ -389,3 +433,7 @@ print(f"Picked {pick} as #1 best tuftie of the year!")
 util.helpers.writeToLog(pick)
 
 postBirdToTwitter(pick, message, b_should_post)
+
+# clear data after bot is done (saves a lot of storage!)
+util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
+util.helpers.deleteAllTempImages(IMAGE_INFER_DIR)

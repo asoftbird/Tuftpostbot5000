@@ -1,6 +1,30 @@
 import os
+import json
+import sys
+import shutil
+import pathlib
 from datetime import datetime
 from .defaults import LOGFILE_DEFAULT, REGISTRY_DEFAULT
+
+# linux / windows compatibility
+base_posix_path = pathlib.PosixPath
+if sys.platform.startswith("linux"):
+    pass
+elif sys.platform.startswith("win32"):
+    pathlib.PosixPath = pathlib.WindowsPath
+
+# decorators
+# TODO: use kwargs to ensure compatibility with other functions
+# TODO: figure out how to use this with default arguments
+def DCcheckOutfileExists(func):
+    def wrapper(data, filename):
+        if not os.path.isfile(filename):
+            print(f"Error: file '{filename}' does not exist. Writing to new file.")
+            newfile = open(filename, "x"); newfile.close()
+            func(data, filename)
+        else:
+            func(data, filename)
+    return wrapper
 
 # utility functions
 def getTime():
@@ -59,3 +83,26 @@ def writeImageIDToRegistry(string, target_file=REGISTRY_DEFAULT):
             with open(target_file, "a") as newregistry:
                 newregistry.write(string)
                 print(f"Wrote {string} to new file")
+
+def copyFile(target_dir, target_name, destination_dir):
+    target_path = target_dir + "\\" + target_name
+    destination_path = destination_dir + "\\" + target_name
+    shutil.copy(target_path, destination_path)
+
+@DCcheckOutfileExists
+def writeDictToJSON(new_data, target_file):
+    # load data from file and add new data
+    with open(target_file, "r") as file:
+        try:
+            current_data = json.load(file)
+        except json.decoder.JSONDecodeError as e:
+            print(f"json.decoder.JSONDecodeError: {e}. File likely empty; ")
+            current_data = {}
+        current_data.update(new_data)
+    
+    # write old+new data to empty file
+    with open(target_file, "w") as file:
+        json.dump(current_data, file, indent=4, sort_keys=False)
+
+
+        
