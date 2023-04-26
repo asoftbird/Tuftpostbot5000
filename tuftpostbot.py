@@ -277,7 +277,7 @@ def pickBackupTuftie():
 
 def pickBestTuftieFromResults(input_list, b_writeRegistry):
     util.helpers.writeToLog(f"input list length: {len(input_list)}. list: {input_list}")
-    print(f"input list length: {len(input_list)}. list: {input_list}")
+    print(f"input list length: {len(input_list)}.")
     try:
         index = random.randint(0, len(input_list)-1)
         result_list = input_list[index]
@@ -372,7 +372,7 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
 
 
 # clear temp folders before loading new images
-util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
+
 util.helpers.deleteAllTempImages(IMAGE_STORE_DIR)
 
 if "NOPOST" in sys.argv:
@@ -404,7 +404,6 @@ if chance != 42:
     resizeImages(downloaded_filename_list, IMAGE_DOWNLOAD_DIR, IMAGE_STORE_DIR, RESOLUTION)
 
     result_list = checkTufts(IMAGE_STORE_DIR, initial_data_set)
-    print(result_list)
 
     pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
 else:
@@ -418,3 +417,4 @@ print(f"Picked {pick} as #1 best tuftie of the year!")
 util.helpers.writeToLog(pick)
 
 postBirdToTwitter(pick, message, b_should_post)
+util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
