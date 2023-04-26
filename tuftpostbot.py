@@ -144,6 +144,30 @@ def filterSearchResults(search_query):
     return(data_list_full, b_returned_image)
 
 
+def asdf(metadata_list, filename):
+    # take a list of data (image_url, ownername, photoid, ownerid, confidence, tuftness)
+    # along with a filename
+    # create a metadata.json file containing this data;
+    # format:
+    #     "UUID": {
+    #         "url": "https://titmou.se/tuft.gif",
+    #         "owner": "AAAAAA",
+    #         "photo-id": 13245,
+    #         "filename": "a",
+    #         "owner-id": "5000",
+    #         "confidence": "A",
+    #         "istuft": "AAAAAAAAAAAAA"
+    #     }
+    # data will not be modified during runtime (ie. no "is posted?" flag)
+    # does require duplicate checking though.
+    # use checkImageIDInRegistry() for this?
+    
+
+
+
+    pass
+
+
 def collectInitialImageDataSet(count, max_requests):
     iterator = 0
     foundImages = 0
