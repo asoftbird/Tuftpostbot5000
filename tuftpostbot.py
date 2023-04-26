@@ -246,15 +246,12 @@ def checkTufts(filepath, image_data_list):
             util.helpers.writeToLog(f"{file} rejected, {probs[1].item()}")
             util.helpers.deleteSingleImage(filepath, file)
             image_id = file.replace("rs_", "").replace(".jpg", "")
-            index_a, index_b = util.helpers.findStringInNestedList(image_data_list, image_id)
-            probability = '{:.4f}'.format(probs[1].item())
-            image_data_list[index_a].append(probability)
-            image_data_list[index_a].append(str(is_tufter))
+            index_a, _ = util.helpers.findStringInNestedList(image_data_list, image_id)
             del image_data_list[index_a]
         else:
             util.helpers.writeToLog(f"{file} accepted, {probs[1].item()}")
             image_id = file.replace("rs_", "").replace(".jpg", "")
-            index_a, index_b = util.helpers.findStringInNestedList(image_data_list, image_id)
+            index_a, _ = util.helpers.findStringInNestedList(image_data_list, image_id)
             probability = '{:.4f}'.format(probs[1].item())
             image_data_list[index_a].append(probability)
             image_data_list[index_a].append(str(is_tufter))
