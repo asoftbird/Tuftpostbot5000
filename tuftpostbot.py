@@ -384,10 +384,6 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
         print(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text}")
         util.helpers.writeToLog(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text}")
 
-# TODO:
-# keep files in /resized/ around so there's a supply of tufterinos available
-
-
 # clear temp folders before loading new images
 util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
 util.helpers.deleteAllTempImages(IMAGE_INFER_DIR)
@@ -421,7 +417,6 @@ if chance != 42:
     resizeImages(downloaded_filename_list, IMAGE_DOWNLOAD_DIR, IMAGE_INFER_DIR, RESOLUTION)
 
     result_list, image_list = checkTufts(IMAGE_INFER_DIR, initial_data_set)
-    print(result_list, image_list)
     
     createMetadataDict(result_list, image_list)
     
@@ -439,3 +434,6 @@ util.helpers.writeToLog(pick)
 
 postBirdToTwitter(pick, message, b_should_post)
 
+# clear data after bot is done (saves a lot of storage!)
+util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
+util.helpers.deleteAllTempImages(IMAGE_INFER_DIR)

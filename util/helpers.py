@@ -96,10 +96,9 @@ def writeDictToJSON(new_data, target_file):
         try:
             current_data = json.load(file)
         except json.decoder.JSONDecodeError as e:
-            print(f"{e}. File likely empty; ")
+            print(f"json.decoder.JSONDecodeError: {e}. File likely empty; ")
             current_data = {}
         current_data.update(new_data)
-        print(current_data)
     
     # write old+new data to empty file
     with open(target_file, "w") as file:
