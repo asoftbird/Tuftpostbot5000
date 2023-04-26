@@ -14,6 +14,7 @@ elif sys.platform.startswith("win32"):
     pathlib.PosixPath = pathlib.WindowsPath
 
 # decorators
+# todo: use kwargs to ensure compatibility with other functions
 def DCcheckOutfileExists(func):
     def wrapper(filename, data):
         if not os.path.isfile(filename):
