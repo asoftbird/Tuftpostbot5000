@@ -152,7 +152,7 @@ def filterSearchResults(search_query):
     return(data_list_full, b_returned_image)
 
 
-def saveImageMetadata(metadata_list, filename):
+def createMetadataDict(metadata_list, filename_list):
     # take a list of data (image_url, ownername, photoid, ownerid, confidence, tuftness)
     # ['https://live.staticflickr.com/65535/51117059506_71a5146191_o.jpg', 'Jim Zenock', '51117059506', '149741069@N04', '0.9999', 'True']
     # along with a filename
@@ -170,17 +170,23 @@ def saveImageMetadata(metadata_list, filename):
     # data will not be modified during runtime (ie. no "is posted?" flag)
     # does require duplicate checking though.
     # use checkImageIDInRegistry() for this?
-    metadata = {
-        metadata_list[2]: {
-            'url': metadata_list[0],
-            'owner': metadata_list[1],
-            'photo-id': metadata_list[2],
-            'filename': filename,
-            'owner-id': metadata_list[3],
-            'confidence': metadata_list[4],
-            'tuftness': metadata_list[5]
-        }
-    }
+    
+    metadata = {}
+
+    for index, item in enumerate(metadata_list):
+        dct = {
+            item[2]: {
+                'url': item[0],
+                'owner': item[1],
+                'photo-id': item[2],
+                'filename': filename_list[index],
+                'owner-id': item[3],
+                'confidence': item[4],
+                'tuftness': item[5]
+                }
+            }
+        metadata.update(dct)
+
     writeDictToJSON(metadata, IMAGE_METADATA_FILE)
 
 def collectInitialImageDataSet(count, max_requests):
@@ -238,6 +244,7 @@ def resizeImages(list_filenames, filepath, target_path, width):
 
 
 def checkTufts(filepath, image_data_list):
+    accepted_images = []
     for file in os.listdir(filepath):
         img = PILImage.create(str(filepath)+"/"+str(file))
         is_tufter,_,probs = learn.predict(img)
@@ -255,15 +262,15 @@ def checkTufts(filepath, image_data_list):
             probability = '{:.4f}'.format(probs[1].item())
             image_data_list[index_a].append(probability)
             image_data_list[index_a].append(str(is_tufter))
+            accepted_images.append(file)
             copyFile(filepath, file, IMAGE_STORE_DIR)
         
-       
     if len(image_data_list) == 0:
         util.helpers.writeToLog("CheckTufts: dataset empty!")
         print("CheckTufts: dataset empty!")
 
     final_data_table = image_data_list
-    return final_data_table
+    return final_data_table, accepted_images
 
 
 def pickBackupTuftie():
@@ -413,8 +420,10 @@ if chance != 42:
 
     resizeImages(downloaded_filename_list, IMAGE_DOWNLOAD_DIR, IMAGE_INFER_DIR, RESOLUTION)
 
-    result_list = checkTufts(IMAGE_INFER_DIR, initial_data_set)
-    #saveImageMetadata(result_list, )
+    result_list, image_list = checkTufts(IMAGE_INFER_DIR, initial_data_set)
+    print(result_list, image_list)
+    
+    createMetadataDict(result_list, image_list)
     
 
     pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
