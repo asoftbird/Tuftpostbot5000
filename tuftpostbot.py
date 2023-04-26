@@ -69,10 +69,12 @@ util.setRegistryFile("registry.log")
 from util.helpers import *
 
 BACKUP_TUFT_DIR = "fallbacktuft"
-BACKUP_METAFILE = "fallbackmeta.json"
 IMAGE_STORE_DIR = "imagestore"
 IMAGE_INFER_DIR = "temp"
 IMAGE_DOWNLOAD_DIR = "downloads"
+
+BACKUP_METAFILE = "fallbackmeta.json"
+IMAGE_METADATA_FILE = "metadata.json"
 
 # references
 auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
