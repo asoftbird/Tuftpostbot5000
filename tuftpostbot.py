@@ -18,12 +18,7 @@ from discord_webhook import DiscordWebhook
 from cohost.models.user import User
 from cohost.models.block import MarkdownBlock
 
-import util
 
-util.setLogfile("tuftlog.log")
-util.setRegistryFile("registry.txt")
-
-from util.helpers import *
 
 # linux / windows compatibility
 base_posix_path = pathlib.PosixPath
@@ -65,8 +60,18 @@ RESOLUTION = 1600 # (width)
 DEFAULTMSG = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}")
 ENABLE_WEBHOOK = True
 ENABLE_COHOST = True
+
+
+# paths
+import util
+util.setLogfile("tuftlog.log")
+util.setRegistryFile("registry.txt")
+from util.helpers import *
+
 BACKUP_TUFT_DIR = "fallbacktuft"
 BACKUP_METAFILE = "fallbackmeta.json"
+IMAGE_STORE_DIR = "imagestore"
+IMAGE_DOWNLOAD_DIR = "downloads"
 
 # references
 auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
@@ -317,7 +322,7 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
         util.helpers.writeToLog("WARNING: BACKUP IMAGE USED.")
         file_path = "fallbacktuft"
     else:
-        file_path = "resized"
+        file_path = IMAGE_STORE_DIR
 
     image_name = "rs_"+filename+".jpg"
     full_path = file_path+"/"+image_name
@@ -367,8 +372,8 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
 
 
 # clear temp folders before loading new images
-util.helpers.deleteAllTempImages("ids")
-util.helpers.deleteAllTempImages("resized")
+util.helpers.deleteAllTempImages(IMAGE_DOWNLOAD_DIR)
+util.helpers.deleteAllTempImages(IMAGE_STORE_DIR)
 
 if "NOPOST" in sys.argv:
     b_should_post = False
@@ -394,11 +399,11 @@ util.helpers.writeToLog(f"Looking for tufties! Rolled {chance}")
 
 if chance != 42: 
     initial_data_set  = (collectInitialImageDataSet(5, ATTEMPTS))
-    downloaded_filename_list = downloadImagesFromURL(initial_data_set, "ids")
+    downloaded_filename_list = downloadImagesFromURL(initial_data_set, IMAGE_DOWNLOAD_DIR)
 
-    resizeImages(downloaded_filename_list, "ids", "resized", RESOLUTION)
+    resizeImages(downloaded_filename_list, IMAGE_DOWNLOAD_DIR, IMAGE_STORE_DIR, RESOLUTION)
 
-    result_list = checkTufts("resized", initial_data_set)
+    result_list = checkTufts(IMAGE_STORE_DIR, initial_data_set)
     print(result_list)
 
     pick = pickBestTuftieFromResults(result_list, b_writeRegistry)
