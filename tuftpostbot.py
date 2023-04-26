@@ -65,7 +65,7 @@ ENABLE_COHOST = True
 # paths
 import util
 util.setLogfile("tuftlog.log")
-util.setRegistryFile("registry.txt")
+util.setRegistryFile("registry.log")
 from util.helpers import *
 
 BACKUP_TUFT_DIR = "fallbacktuft"
