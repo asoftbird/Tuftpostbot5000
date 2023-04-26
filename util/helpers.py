@@ -16,13 +16,13 @@ elif sys.platform.startswith("win32"):
 # decorators
 # todo: use kwargs to ensure compatibility with other functions
 def DCcheckOutfileExists(func):
-    def wrapper(filename, data):
+    def wrapper(data, filename):
         if not os.path.isfile(filename):
             print(f"Error: file '{filename}' does not exist. Writing to new file.")
             newfile = open(filename, "x"); newfile.close()
-            func(filename, data)
+            func(data, filename)
         else:
-            func(filename, data)
+            func(data, filename)
     return wrapper
 
 # utility functions
@@ -91,7 +91,7 @@ def copyFile(target_dir, target_name, destination_dir):
 
 
 @DCcheckOutfileExists
-def writeDictToJSON(target_file, new_data):
+def writeDictToJSON(new_data, target_file):
     # load data from file and add new data
     with open(target_file, "r") as file:
         try:
