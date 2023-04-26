@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 import shutil
 import pathlib
@@ -11,6 +12,17 @@ if sys.platform.startswith("linux"):
     pass
 elif sys.platform.startswith("win32"):
     pathlib.PosixPath = pathlib.WindowsPath
+
+# decorators
+def DCcheckOutfileExists(func):
+    def wrapper(filename, data):
+        if not os.path.isfile(filename):
+            print(f"Error: file '{filename}' does not exist. Writing to new file.")
+            newfile = open(filename, "x"); newfile.close()
+            func(filename, data)
+        else:
+            func(filename, data)
+    return wrapper
 
 # utility functions
 def getTime():
@@ -74,3 +86,24 @@ def copyFile(target_dir, target_name, destination_dir):
     target_path = target_dir + "\\" + target_name
     destination_path = destination_dir + "\\" + target_name
     shutil.copy(target_path, destination_path)
+
+
+
+@DCcheckOutfileExists
+def writeDictToJSON(target_file, new_data):
+    # load data from file and add new data
+    with open(target_file, "r") as file:
+        try:
+            current_data = json.load(file)
+        except json.decoder.JSONDecodeError as e:
+            print(f"{e}. File likely empty; ")
+            current_data = {}
+        current_data.update(new_data)
+        print(current_data)
+    
+    # write old+new data to empty file
+    with open(target_file, "w") as file:
+        json.dump(current_data, file, indent=4, sort_keys=False)
+
+
+        
