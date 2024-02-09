@@ -1,7 +1,6 @@
 /__pycache__/
 /venv/
-
-/util/session.json
+session.json
 
 .env
 .env.dev
