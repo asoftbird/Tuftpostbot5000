@@ -1,14 +1,16 @@
 /__pycache__/
 /venv/
-/_old/
+
+/util/session.json
+
 .env
 .env.dev
 .env.test
 .venv
-tuftregistry.txt
-log.txt
+
+bot.log
+registry.log
 *.pkl
-*.pyc
 
 *.jpg
 fallbackmeta-local.json
