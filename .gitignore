@@ -2,7 +2,7 @@
 /venv/
 session.json
 
-.env
+.env*
 .env.dev
 .env.test
 .venv
