@@ -3,8 +3,8 @@ import sys
 import json
 import random
 import tweepy
+import asyncio
 import flickrapi
-import wget
 import pathlib
 
 from time import sleep
@@ -12,18 +12,12 @@ from dotenv import load_dotenv
 from datetime import datetime
 from PIL import Image
 from PIL import ImageOps
-from urllib import request
 from fastai.vision.all import *
 from fastai.text.all import *
 from fastai.collab import *
 from fastai.tabular.all import *
 from discord_webhook import DiscordWebhook
-from cohost.models.user import User
-from cohost.models.block import MarkdownBlock
-from atproto import Client
-from atproto.exceptions import BadRequestError
-
-from bskysession import *
+import telegram as tg
 
 base_posix_path = pathlib.PosixPath
 
@@ -32,23 +26,26 @@ if sys.platform.startswith("linux"):
 elif sys.platform.startswith("win32"):
     pathlib.PosixPath = pathlib.WindowsPath
 
-load_dotenv()
+load_dotenv(".env.prod")
 
 # API auth keys
+# Twitter keys 
 CONS_KEY=os.getenv('TWT_CONSUMER_APIKEY')
 CONS_SEC=os.getenv('TWT_CONSUMER_APISECRET')
 AUTH_ACC=os.getenv('TWT_AUTH_ACCESSTOKEN')
 AUTH_SEC=os.getenv('TWT_AUTH_SECRET')
 BEARER=os.getenv('TWT_BEARER')
+
+# Flickr
 FLKR_KEY=os.getenv('FLICKR_KEY')
 FLKR_SEC=os.getenv('FLICKR_SECRET')
-BSKY_UNAME=str(os.getenv('BSKY_UNAME'))
-BSKY_PASS=str(os.getenv('BSKY_PASS'))
 
-# cohost env vars
-CH_UNAME=os.getenv('COHO_UNAME')
-CH_PW=os.getenv('COHO_PW')
-CH_PAGE=os.getenv('COHO_PAGE')
+# Telegram
+TG_APIKEY=os.getenv('TG_APIKEY')
+TG_CHANNELID=os.getenv('TG_CHANNELID')
+
+# Discord webhook
+WEBHOOK_URL=str(os.getenv('WEBHOOK_URL'))
 
 # init
 istuft = 0
@@ -68,48 +65,34 @@ TAGS = 'tufted titmouse'
 RESOLUTION = 1600 #pixels, width
 REGISTRY_FILE="tuftregistry.txt"
 DEFAULTMSG = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}")
-WEBHOOK_URL = "https://discord.com/api/webhooks/1009424824399056896/pwF8xcTBfpN25d0RxC7SZgaixE01Yadpjq2N-IFT9wk8x-02zUNrZ5vWCn57ZcCHyZkk"
-ENABLE_WEBHOOK = True
-ENABLE_BSKY=bool(os.getenv('ENABLE_BSKY'))
-ENABLE_COHOST=bool(os.getenv('ENABLE_COHOST'))
+
+ENABLE_WEBHOOK=bool(os.getenv('ENABLE_DISCORD'))
+ENABLE_TG=bool(os.getenv('ENABLE_TG'))
 BACKUP_TUFT_DIR = "fallbacktuft"
 BACKUP_METAFILE = "fallbackmeta.json"
-# WEBHOOK = TUFTED TIDDIES SERVER
+
 
 # references
 
-# v1.1 api
+# Twitter v1.1 api
 auth = tweepy.OAuthHandler(CONS_KEY, CONS_SEC)
 auth.set_access_token(AUTH_ACC, AUTH_SEC)
 api = tweepy.API(auth, wait_on_rate_limit=True)
 
-# v2.0 api
+# Twitter v2.0 api
 twclient = tweepy.Client(BEARER, CONS_KEY, CONS_SEC, AUTH_ACC, AUTH_SEC, wait_on_rate_limit=True)
 
-# flickr api
+# Flickr api
 flickr = flickrapi.FlickrAPI(FLKR_KEY, FLKR_SEC, format='parsed-json')
 
-#bsky api
-if ENABLE_BSKY:
-  bsky_client = Client()
-
-  session_string = getSessionString()
-
-  try:
-      bsky_client.login(session_string=session_string)
-  except BadRequestError as e:
-      print(f"Bsky login failed: {e}")
-  else:
-      print("Bsky login succesful!")
-
-# twitter login
+# Twitter login
 try:
     api.verify_credentials()
     print("Authentication OK")
 except Exception as e:
     print(f"Error during authentication: {e}")
 
-# utility functions
+# Utility functions
 def getTime():
     dateTimeObj = datetime.now()
     timestampStr = dateTimeObj.strftime("[%d-%m-%Y %H:%M:%S]")
@@ -126,7 +109,6 @@ def deleteAllTempImages(folder_path):
 
 def deleteSingleImage(folder_path, filename):
     full_path = folder_path+"/"+filename
-    #print(f"deleted {full_path} :D")
     os.remove(full_path)
 
 def findStringInNestedList(search_list, search_string):
@@ -142,11 +124,9 @@ def checkImageIDInRegistry(string):
     try:
         with open(REGISTRY_FILE, "r") as registry:
             if string in set(registry.read().split('\n')):
-                #print(f"Found {string}!")
                 #writeToLog("checkImageIDInRegistry: Found match. Ignoring!")
                 return True
             else:
-                #print(f"Could not find {string}!")
                 return False
 
     except FileNotFoundError:
@@ -185,10 +165,8 @@ learn = load_learner('tuftmodel_v8_10ep_lr0.001.pkl')
 def findBirdImage(search_tags, extra_arguments, image_fetch_count):
     page_number = random.randint(1, PAGE_RANGE)
     search_arguments = [extra_arguments]
-    #print(f"Page: {page_number}.")
     search_query = flickr.photos.search(tags=search_tags, extras=search_arguments, per_page=image_fetch_count, page=page_number)
     return search_query
-
 
 # filter based on functionality; filtering on bird type comes later
 def filterSearchResults(search_query):
@@ -225,7 +203,6 @@ def filterSearchResults(search_query):
                 rejected = rejected + 1
                 b_returned_image = False
         else:
-            #print(f"ImageID {temp_image_id} already posted. Ignoring.")
             writeToLog("ImageID " + temp_image_id + " already posted. Ignoring.")
             b_returned_image = False
 
@@ -268,7 +245,6 @@ def downloadImagesFromURL(data_set, destination_path):
     if len(data_set) < 1:
         print("Dataset empty! AAAAAAAA")
         writeToLog("dataset empty! AAAAAAA")
-        # TODO handle exception
 
     for _, url in enumerate(data_set):
         file_extension = str(url[0][-4:])
@@ -339,7 +315,6 @@ def pickBackupTuftie():
     return fallbackDataTable
 
 
-
 def pickBestTuftieFromResults(input_list, b_writeRegistry):
     writeToLog(f"input list length: {len(input_list)}. list: {input_list}")
     print(f"input list length: {len(input_list)}. list: {input_list}")
@@ -397,22 +372,16 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
 
 
     if message == "default":
-        status_text_twt = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}. Tuftpostbot is now also on blue sky: titmou.se/sky")
+        status_text_twt = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}.")
         status_text_other = (f"#Tuftpostbot Tuftie: {istuft}({probability}). Photo by {owner_name}.")
-        #status_text = DEFAULTMSG
     else:
-        status_text_twt = (f"#Tuftpostbot {message}. Tuftie: {istuft}({probability}). Photo by {owner_name}. Tuftpostbot is now also on blue sky: titmou.se/sky")
+        status_text_twt = (f"#Tuftpostbot {message}. Tuftie: {istuft}({probability}). Photo by {owner_name}.")
         status_text_other = (f"#Tuftpostbot {message}. Tuftie: {istuft}({probability}). Photo by {owner_name}.")
     if b_should_post:
         #send to twitter
-
-        #media_info = api.simple_upload(filename=full_path)
-        #media_id_list.append(media_info.media_id)
-
         media_info = api.media_upload(filename=full_path)
         posted_status_v2 = twclient.create_tweet(text=status_text_twt, media_ids=[media_info.media_id])
-        #posted_status_info = api.update_status(status=status_text, media_ids=media_id_list)
-        #media_id_list.clear()
+
         print(f"Sent {status_text_twt} to Twitter!")
         writeToLog(f"Sent {status_text_twt} to Twitter!")
 
@@ -429,21 +398,16 @@ def postBirdToTwitter(picked_image, message="default", b_should_post=True):
             print(f"Sent {discord_text} to Discord!")
             writeToLog(f"Sent {discord_text} to Discord!")
 
-        if ENABLE_COHOST:
-            #cohost stuff
-            user = User.login(CH_UNAME, CH_PW)
-            project = user.getProject(CH_PAGE)
-            # newpost = project.post(status_text, blocks=[MarkdownBlock(f"{tweet_url}")], tags=['tuftpostbot']) # 'tufted titmouse', 'automated posting', 'bot'
-            newpost = project.post(status_text_other, blocks=[MarkdownBlock(f"![]({media_url_original})")], tags=['tuftpostbot']) # 'tufted titmouse', 'automated posting', 'bot'
-            print(f"Sent {status_text_other} to Cohost as well (hopefully)!")
-            writeToLog(f"Sent {status_text_other} to Cohost as well (hopefully)!")
+        if ENABLE_TG:
+            tg_text = "https://fixupx.com/asoftbird/status/"+tweet_id
+            async def postToTelegram():
+                tg_bot = tg.Bot(TG_APIKEY)
+                async with tg_bot:
+                    await tg_bot.send_message(text=tg_text, chat_id=TG_CHANNELID)
+            asyncio.run(postToTelegram())
+            print(f"Sent {tg_text} to Telegram as well (hopefully)!")
+            writeToLog(f"Sent {tg_text} to Telegram as well (hopefully)!")
 
-        if ENABLE_BSKY:
-            with open(full_path, 'rb') as f:
-                image_data = f.read()
-            bsky_client.send_image(text=status_text_other, image=image_data, image_alt=status_text_other)
-            print(f"Sent {status_text_other} to bluesky!")
-            writeToLog(f"Sent {status_text_other} to bluesky!")
     else:
         print(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text_twt}")
         writeToLog(f"Did not send to twitter/dc: NOPOST flag used. Text: {status_text_twt}")
